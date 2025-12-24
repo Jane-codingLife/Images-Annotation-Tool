@@ -1,6 +1,11 @@
 import config.logging_config
 from views import MainWindow
 
-app = MainWindow()
-app.mainloop()
 
+def main():
+    app = MainWindow()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()

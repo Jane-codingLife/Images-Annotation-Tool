@@ -1,2 +1,2 @@
 
-from .controller import ImageAnnotationController
+from .image_controller import ImageAnnotationController

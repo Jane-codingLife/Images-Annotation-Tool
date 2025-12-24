@@ -210,8 +210,13 @@ class MainWindow(tk.Tk):
         if not self._dirty:
             return
         text = self.txt_annotation.get("1.0", tk.END).strip()
-        self.controller.save_annotation(text)
-        self._dirty = False
+        try:
+            self.controller.save_annotation(text)
+            self._dirty = False
+        except Exception:
+            logger.error(f"[UI] Save Error: save_flag")
+            raise
+
         self.refresh_listbox()
 
     def on_show_listbox(self):
