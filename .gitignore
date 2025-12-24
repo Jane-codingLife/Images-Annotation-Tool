@@ -1,0 +1,30 @@
+# 主要用途：檔案「永遠不要被追蹤、不要被上傳」
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+.venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+log/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Database / runtime data
+data/
+
+# Assets / resources
+comic/
+
+# Tests (runtime / temp)
+tests/
