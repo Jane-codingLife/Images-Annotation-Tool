@@ -150,9 +150,9 @@ class MainWindow(tk.Tk):
         # ⚠ Day4-2 這裡才會建立 repo / db / controller
         # messagebox.showinfo("提示", "資料夾已選擇，Controller 尚未初始化")
         try:
-            repo = ImageRepository(images_path)
-            db = AnnotationDB(db_path)
-            self.controller = ImageAnnotationController(repo, db)
+            # repo = ImageRepository(images_path)
+            # db = AnnotationDB(db_path)
+            self.controller = ImageAnnotationController(str(images_path), str(db_path))
             self.update_view()
             self.refresh_listbox()
         except Exception as e:

@@ -41,6 +41,12 @@ db_handler = logging.FileHandler(
 db_handler.setFormatter(formatter)
 # db_handler.setLevel(logging.INFO)
 
+# 3: Controller
+con_handler = logging.FileHandler(
+    filename=LOG_PATH / "controllerLog.log",
+    encoding="utf-8"
+)
+con_handler.setFormatter(formatter)
 
 # logger 指定
 root_logger = logging.getLogger()
@@ -53,3 +59,9 @@ db_logger.setLevel(logging.INFO)
 if not db_logger.handlers:
     db_logger.addHandler(db_handler)
 db_logger.propagate = False
+
+con_logger = logging.getLogger("controllers.image_controller")
+con_logger.setLevel(logging.INFO)
+if not con_logger.handlers:
+    con_logger.addHandler(con_handler)
+con_logger.propagate = False
