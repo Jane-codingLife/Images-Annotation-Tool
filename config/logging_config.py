@@ -31,7 +31,7 @@ app_handler = logging.FileHandler(
     encoding="utf-8"
 )
 app_handler.setFormatter(formatter)
-# app_handler.setLevel(logging.DEBUG)
+app_handler.setLevel(logging.INFO)
 
 # 2: DB
 db_handler = logging.FileHandler(
@@ -39,7 +39,7 @@ db_handler = logging.FileHandler(
     encoding="utf-8"
 )
 db_handler.setFormatter(formatter)
-# db_handler.setLevel(logging.INFO)
+db_handler.setLevel(logging.INFO)
 
 # 3: Controller
 con_handler = logging.FileHandler(
@@ -47,10 +47,11 @@ con_handler = logging.FileHandler(
     encoding="utf-8"
 )
 con_handler.setFormatter(formatter)
+con_handler.setLevel(logging.INFO)
 
 # logger 指定
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
+root_logger.setLevel(logging.INFO)
 if not root_logger.handlers:
     root_logger.addHandler(app_handler)
 

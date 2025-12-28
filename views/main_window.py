@@ -34,6 +34,8 @@ class MainWindow(tk.Tk):
         self._dirty = False
         # Image List Visible flag
         self.list_visible = None
+        self.current_index = 1
+        self.img_path = None
 
         self._build_layout()
         self._bind_events()
@@ -135,6 +137,7 @@ class MainWindow(tk.Tk):
 
     # ---------- Event Handlers ----------
     def on_select_folder(self):
+        # 資料夾選擇：初始化所有資料來源
         images_path = filedialog.askdirectory()
         if not images_path:
             return
@@ -147,12 +150,9 @@ class MainWindow(tk.Tk):
         self.lbl_folderName.config(text=f" {images_path.name}")
         logger.info(f"資料夾選擇: {images_path}")
 
-        # ⚠ Day4-2 這裡才會建立 repo / db / controller
-        # messagebox.showinfo("提示", "資料夾已選擇，Controller 尚未初始化")
         try:
-            # repo = ImageRepository(images_path)
-            # db = AnnotationDB(db_path)
             self.controller = ImageAnnotationController(str(images_path), str(db_path))
+            self.current_index = 1
             self.update_view()
             self.refresh_listbox()
         except Exception as e:
@@ -160,22 +160,30 @@ class MainWindow(tk.Tk):
             messagebox.showerror("取得失敗", str(e))
 
     def on_prev(self):
+        # 上一頁
         if not self.controller:
             return
         try:
             self.save_flag()
-            self.controller.prev_image()
+            if self.current_index == 1:
+                messagebox.showinfo("資訊", "已經是第一頁。")
+                return
+            self.current_index -= 1
             self.update_view()
         except Exception as e:
             logger.error(f"UI Error: {e}")
             messagebox.showerror("圖頁錯誤", str(e))
 
     def on_next(self):
+        # 下一頁
         if not self.controller:
             return
         try:
             self.save_flag()
-            self.controller.next_image()
+            if self.current_index == self.controller.get_total_count:
+                messagebox.showinfo("資訊", "已經是第一頁。")
+                return
+            self.current_index += 1
             self.update_view()
         except Exception as e:
             logger.error(f"UI Error: {e}")
@@ -187,7 +195,10 @@ class MainWindow(tk.Tk):
         try:
             self.save_flag()
             page = int(self.entry_jump.get())
-            self.controller.jump_to(page)
+            if page < 1 or page > self.controller.get_total_count():
+                messagebox.showinfo("資訊", "超過頁數。")
+                return
+            self.current_index = page
             self.update_view()
         except Exception as e:
             logger.error(f"UI Error: {e}")
@@ -196,10 +207,7 @@ class MainWindow(tk.Tk):
     def on_save(self):
         if not self.controller:
             return
-        # text = self.txt_annotation.get("1.0", tk.END).strip()
         try:
-            # self.controller.save_annotation(text)
-            # self._dirty = False
             self.save_flag()
             messagebox.showinfo("存檔完成", "已儲存")
         except Exception as e:
@@ -211,8 +219,8 @@ class MainWindow(tk.Tk):
             return
         text = self.txt_annotation.get("1.0", tk.END).strip()
         try:
-            self.controller.save_annotation(text)
-            self._dirty = False
+            if self.controller.update_annotation(self.img_path, text):
+                self._dirty = False
         except Exception:
             logger.error(f"[UI] Save Error: save_flag")
             raise
@@ -220,15 +228,11 @@ class MainWindow(tk.Tk):
         self.refresh_listbox()
 
     def on_show_listbox(self):
-        # if self.listbox.size() == 0:
-        #     self.refresh_listbox()
         if self.list_visible:
             self.list_frame.pack_forget()
             self.listbox.selection_clear(0, tk.END)
         else:
-            if self.controller:
-                idx = self.controller.current_index
-                self.listbox.selection_set(idx)
+            self.listbox.selection_set(self.current_index - 1)
             self.list_frame.pack(side=tk.LEFT, fill=tk.Y)
 
         self.list_visible = not self.list_visible
@@ -238,11 +242,12 @@ class MainWindow(tk.Tk):
             return
         self.listbox.delete(0, tk.END)
 
-        for img in self.controller.get_images():
+        for img in self.controller.get_all_image():
+            img = Path(img)
             self.listbox.insert(tk.END, img.stem)
             idx = self.listbox.index("end") - 1
             try:
-                if self.controller.has_annotation(img):
+                if self.controller.get_annotation(img):
                     self.listbox.itemconfig(idx, bg="gray")
             except Exception as e:
                 logger.error(f"UI Error: {e}")
@@ -251,22 +256,22 @@ class MainWindow(tk.Tk):
     # ---------- View Update ----------
     def update_view(self):
         self.update_status()
-        self.update_annotation()
         self.update_image()
+        self.update_annotation()
 
     def update_status(self):
         # 狀態處理
         if not self.controller:
             return
-        current, total = self.controller.get_status()
-        self.lbl_status.config(text=f"{current} / {total}")
+        total = self.controller.get_total_count()
+        self.lbl_status.config(text=f"{self.current_index} / {total}")
 
     def update_annotation(self):
         # 註解處理
         if not self.controller:
             return
         self.txt_annotation.delete("1.0", tk.END)
-        text = self.controller.get_current_annotation()
+        text = self.controller.get_annotation(self.img_path)
         if text:
             self.txt_annotation.insert("1.0", text)
 
@@ -275,13 +280,13 @@ class MainWindow(tk.Tk):
         if not self.controller:
             return
 
-        image_path = self.controller.get_current_image()
-        if not image_path:
+        self.img_path = self.controller.get_index_image(self.current_index)
+        if not self.img_path:
             return
 
         try:
             # 1.開圖
-            img = Image.open(image_path)
+            img = Image.open(self.img_path)
 
             # 2.取得 Canvas 大小
             self.canvas.update_idletasks()
@@ -327,10 +332,9 @@ class MainWindow(tk.Tk):
         self.update_image()
 
     def on_open_image_viewer(self, event):
-        image_path = self.controller.get_current_image()
         try:
-            if image_path:
-                ImageViewer(self, image_path)
+            if self.img_path:
+                ImageViewer(self, self.img_path)
         except Exception as e:
             logger.error(f"UI Error: {e}")
             messagebox.showerror("另開圖片視窗開啟失敗")
@@ -359,8 +363,7 @@ class MainWindow(tk.Tk):
             return
         try:
             self.save_flag()
-            page = selection[0] + 1  # 0-based
-            self.controller.jump_to(page)
+            self.current_index = selection[0] + 1
             self.update_view()
         except Exception as e:
             logger.error(f"UI Error: {e}")
