@@ -1,6 +1,12 @@
-""" UI 使用者介面
-    - 顯示
-    - 操作
+"""
+ >> View 只關心「顯示什麼、怎麼互動」
+ >> View 永遠不應該知道「資料是檔案 / DB / API」
+ >> Controller 決定「資料從哪來、怎麼算、怎麼存」
+檢查點
+ □ View 檔案中沒有 os / Path
+ □ View 不知道資料夾結構
+ □ 所有錯誤顯示只在 View 一個地方
+ □ Controller 換成 Fake，UI 仍可跑
 """
 
 import logging
@@ -15,6 +21,24 @@ from views.image_viewer import ImageViewer
 from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
+
+
+# ---------- Error Handlers ----------
+def error_handler(exc: Exception):
+    # 1. 給工程師完整 trace（已經寫進 log 了，這行是保險）
+    logger.exception(f"UI caught Error: {str(exc)}")
+    # 2. 給使用者看的訊息（整理過）
+    messagebox.showerror("錯誤", str(exc))
+
+
+def safe_call(func, args=None):
+    try:
+        if args:
+            func(**args)
+        else:
+            func()
+    except Exception as e:
+        error_handler(e)
 
 
 class MainWindow(tk.Tk):
@@ -32,13 +56,15 @@ class MainWindow(tk.Tk):
         self._photo_image = None
         # Auto Save flag => Annotation Update
         self._dirty = False
+        self._dirty_img_path = None
         # Image List Visible flag
         self.list_visible = None
-        self.current_index = 1
+        self.current_index_1_based = 1
+        self.total_index = 0
         self.img_path = None
 
-        self._build_layout()
-        self._bind_events()
+        safe_call(self._build_layout)
+        safe_call(self._bind_events)
 
         # set event bind
         self.bind("<Control-Left>", self.on_key_prev)
@@ -49,7 +75,7 @@ class MainWindow(tk.Tk):
         self.canvas.bind("<Configure>", self.on_canvas_resize)
         self.canvas.bind("<Double-Button-1>", self.on_open_image_viewer)
 
-        self.txt_annotation.bind("<KeyRelease>", self.on_text_modified)
+        self.txt_annotation.bind("<Key>", self.on_text_modified)
         self.listbox.bind("<<ListboxSelect>>", self.on_list_select)
 
     # ---------- UI Layout ----------
@@ -128,12 +154,12 @@ class MainWindow(tk.Tk):
 
     # ---------- Event Binding ----------
     def _bind_events(self):
-        self.btn_select.config(command=self.on_select_folder)
-        self.btn_prev.config(command=self.on_prev)
-        self.btn_next.config(command=self.on_next)
-        self.btn_jump.config(command=self.on_jump)
-        self.btn_save.config(command=self.on_save)
-        self.btn_image_list.config(command=self.on_show_listbox)
+        self.btn_select.config(command=lambda fc=self.on_select_folder: safe_call(fc))
+        self.btn_prev.config(command=lambda fc=self.on_prev: safe_call(fc))
+        self.btn_next.config(command=lambda fc=self.on_next: safe_call(fc))
+        self.btn_jump.config(command=lambda fc=self.on_jump: safe_call(fc))
+        self.btn_save.config(command=lambda fc=self.on_save: safe_call(fc))
+        self.btn_image_list.config(command=lambda fc=self.on_show_listbox: safe_call(fc))
 
     # ---------- Event Handlers ----------
     def on_select_folder(self):
@@ -150,89 +176,95 @@ class MainWindow(tk.Tk):
         self.lbl_folderName.config(text=f" {images_path.name}")
         logger.info(f"資料夾選擇: {images_path}")
 
-        try:
-            self.controller = ImageAnnotationController(str(images_path), str(db_path))
-            self.current_index = 1
-            self.update_view()
-            self.refresh_listbox()
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("取得失敗", str(e))
+        # 組裝(Composition)
+        repo = ImageRepository(images_path)
+        db = AnnotationDB(db_path)
+        self.controller = ImageAnnotationController(repo, db)
+        self.current_index_1_based = 1
+        self.total_index = self.controller.get_total_count()["total_count"]
+        safe_call(self.refresh_listbox)
+        safe_call(self.update_view)
 
     def on_prev(self):
         # 上一頁
         if not self.controller:
             return
-        try:
-            self.save_flag()
-            if self.current_index == 1:
-                messagebox.showinfo("資訊", "已經是第一頁。")
-                return
-            self.current_index -= 1
-            self.update_view()
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("圖頁錯誤", str(e))
+
+        self._dirty_img_path = self.img_path
+        safe_call(self.save_flag)
+        if self.current_index_1_based == 1:
+            messagebox.showinfo("資訊", "已經是第一頁。")
+            return
+        self.current_index_1_based -= 1
+        safe_call(self.refresh_listbox)
+        safe_call(self.update_view)
 
     def on_next(self):
         # 下一頁
         if not self.controller:
             return
-        try:
-            self.save_flag()
-            if self.current_index == self.controller.get_total_count:
-                messagebox.showinfo("資訊", "已經是第一頁。")
-                return
-            self.current_index += 1
-            self.update_view()
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("圖頁錯誤", str(e))
+
+        self._dirty_img_path = self.img_path
+        safe_call(self.save_flag)
+        if self.current_index_1_based == self.total_index:
+            messagebox.showinfo("資訊", "已經是第一頁。")
+            return
+        self.current_index_1_based += 1
+        safe_call(self.refresh_listbox)
+        safe_call(self.update_view)
 
     def on_jump(self):
         if not self.controller:
             return
+
+        self._dirty_img_path = self.img_path
+        safe_call(self.save_flag)
         try:
-            self.save_flag()
             page = int(self.entry_jump.get())
-            if page < 1 or page > self.controller.get_total_count():
-                messagebox.showinfo("資訊", "超過頁數。")
-                return
-            self.current_index = page
-            self.update_view()
         except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("圖頁錯誤", str(e))
+            error_handler(e)
+            raise
+        if page < 1 or page > self.total_index:
+            messagebox.showinfo("資訊", "超過頁數。")
+            return
+        self.current_index_1_based = page
+        safe_call(self.refresh_listbox)
+        safe_call(self.update_view)
 
     def on_save(self):
-        if not self.controller:
-            return
-        try:
-            self.save_flag()
-            messagebox.showinfo("存檔完成", "已儲存")
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("存檔失敗", str(e))
+        self._dirty_img_path = self.img_path
+        safe_call(self.save_flag, {"force": True})
+        safe_call(self.refresh_listbox)
+        messagebox.showinfo("存檔完成", "已儲存")
 
-    def save_flag(self):
-        if not self._dirty:
-            return
+    def save_flag(self, *, force=False):
+        """
+        Use case:
+            - 將目前正在編輯的圖片註解寫入 DB
+            - force=True 表示忽略 dirty
+        """
+        if not self._dirty_img_path:
+            return False
+
+        if not self._dirty and not force:
+            return False
+
         text = self.txt_annotation.get("1.0", tk.END).strip()
-        try:
-            if self.controller.update_annotation(self.img_path, text):
-                self._dirty = False
-        except Exception:
-            logger.error(f"[UI] Save Error: save_flag")
-            raise
+        result = self.controller.update_db_annotation(self._dirty_img_path, text)
 
-        self.refresh_listbox()
+        if result["success"]:
+            self._dirty = False
+            self._dirty_img_path = None
+            return True
+
+        return False
 
     def on_show_listbox(self):
         if self.list_visible:
             self.list_frame.pack_forget()
             self.listbox.selection_clear(0, tk.END)
         else:
-            self.listbox.selection_set(self.current_index - 1)
+            self.listbox.selection_set(self.current_index_1_based - 1)
             self.list_frame.pack(side=tk.LEFT, fill=tk.Y)
 
         self.list_visible = not self.list_visible
@@ -242,36 +274,33 @@ class MainWindow(tk.Tk):
             return
         self.listbox.delete(0, tk.END)
 
-        for img in self.controller.get_all_image():
+        result = self.controller.get_all_images()
+        for img in result["images_list"]:
             img = Path(img)
             self.listbox.insert(tk.END, img.stem)
             idx = self.listbox.index("end") - 1
-            try:
-                if self.controller.get_annotation(img):
-                    self.listbox.itemconfig(idx, bg="gray")
-            except Exception as e:
-                logger.error(f"UI Error: {e}")
-                messagebox.showerror("清單標註錯誤:", str(e))
+            note = self.controller.get_annotation(img)["annotation"]
+            if note:
+                self.listbox.itemconfig(idx, bg="gray")
+
+        self.listbox.selection_set(self.current_index_1_based - 1)
 
     # ---------- View Update ----------
     def update_view(self):
-        self.update_status()
-        self.update_image()
-        self.update_annotation()
+        safe_call(self.update_status)
+        safe_call(self.update_image)
+        safe_call(self.update_annotation)
 
     def update_status(self):
         # 狀態處理
-        if not self.controller:
-            return
-        total = self.controller.get_total_count()
-        self.lbl_status.config(text=f"{self.current_index} / {total}")
+        self.lbl_status.config(text=f"{self.current_index_1_based} / {self.total_index}")
 
     def update_annotation(self):
         # 註解處理
         if not self.controller:
             return
         self.txt_annotation.delete("1.0", tk.END)
-        text = self.controller.get_annotation(self.img_path)
+        text = self.controller.get_annotation(self.img_path)["annotation"]
         if text:
             self.txt_annotation.insert("1.0", text)
 
@@ -280,94 +309,85 @@ class MainWindow(tk.Tk):
         if not self.controller:
             return
 
-        self.img_path = self.controller.get_index_image(self.current_index)
+        self.img_path = self.controller.get_index_image(self.current_index_1_based)["image_path"]
         if not self.img_path:
             return
 
-        try:
-            # 1.開圖
-            img = Image.open(self.img_path)
+        # 1.開圖
+        img = Image.open(self.img_path)
 
-            # 2.取得 Canvas 大小
-            self.canvas.update_idletasks()
-            canvas_w = self.canvas.winfo_width()
-            canvas_h = self.canvas.winfo_height()
+        # 2.取得 Canvas 大小
+        self.canvas.update_idletasks()
+        canvas_w = self.canvas.winfo_width()
+        canvas_h = self.canvas.winfo_height()
 
-            if canvas_w <= 1 or canvas_h <= 1:
-                return  # 尚未初始化完成
+        if canvas_w <= 1 or canvas_h <= 1:
+            return  # 尚未初始化完成
 
-            # 3. 等比例縮放
-            img_ratio = img.width / img.height
-            canvas_ratio = canvas_w / canvas_h
+        # 3. 等比例縮放
+        img_ratio = img.width / img.height
+        canvas_ratio = canvas_w / canvas_h
 
-            if img_ratio > canvas_ratio:
-                # 原圖 > 視窗尺寸  =>  依視窗寬、調高
-                new_w = canvas_w
-                new_h = int(canvas_w / img_ratio)
-            else:
-                # 原圖 < 視窗尺寸  =>  調寬、依視窗高
-                new_h = canvas_h
-                new_w = int(canvas_h * img_ratio)
+        if img_ratio > canvas_ratio:
+            # 原圖 > 視窗尺寸  =>  依視窗寬、調高
+            new_w = canvas_w
+            new_h = int(canvas_w / img_ratio)
+        else:
+            # 原圖 < 視窗尺寸  =>  調寬、依視窗高
+            new_h = canvas_h
+            new_w = int(canvas_h * img_ratio)
 
-            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-            # 4. 轉成 Tk Image
-            self._photo_image = ImageTk.PhotoImage(img)
+        # 4. 轉成 Tk Image
+        self._photo_image = ImageTk.PhotoImage(img)
 
-            # 5. 清空並顯示
-            self.canvas.delete("all")
-            self.canvas.create_image(
-                canvas_w // 2,
-                canvas_h // 2,
-                image=self._photo_image,
-                anchor="center"
-            )
-
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("圖片顯示錯誤", str(e))
+        # 5. 清空並顯示
+        self.canvas.delete("all")
+        self.canvas.create_image(
+            canvas_w // 2,
+            canvas_h // 2,
+            image=self._photo_image,
+            anchor="center"
+        )
 
     # ---------- Canvas event(bind) Handler ----------
     def on_canvas_resize(self, event):
-        self.update_image()
+        safe_call(self.update_image)
 
     def on_open_image_viewer(self, event):
-        try:
-            if self.img_path:
-                ImageViewer(self, self.img_path)
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("另開圖片視窗開啟失敗")
+        if self.img_path:
+            ImageViewer(self, self.img_path)
 
     # Windows bind
     def on_key_prev(self, event):
-        self.on_prev()
+        safe_call(self.on_prev)
 
     def on_key_next(self, event):
-        self.on_next()
+        safe_call(self.on_next)
 
     def on_key_save(self, event):
-        self.on_save()
+        safe_call(self.on_save)
 
     def off_show_list(self, event):
         self.list_visible = True
-        self.on_show_listbox()
+        safe_call(self.on_show_listbox)
 
     # Widget bind
     def on_text_modified(self, event):
-        self._dirty = True
+        if event.char:
+            self._dirty = True
 
     def on_list_select(self, event):
         selection = self.listbox.curselection()
-        if not selection or not self.controller:
+        if not selection:
             return
-        try:
-            self.save_flag()
-            self.current_index = selection[0] + 1
-            self.update_view()
-        except Exception as e:
-            logger.error(f"UI Error: {e}")
-            messagebox.showerror("清單顯示失敗", str(e))
+
+        self._dirty_img_path = self.img_path
+        safe_call(self.save_flag)
+        self.current_index_1_based = selection[0] + 1
+        safe_call(self.update_view)
+        safe_call(self.refresh_listbox)
 
 
 if __name__ == "__main__":

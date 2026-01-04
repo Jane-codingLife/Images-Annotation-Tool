@@ -16,7 +16,19 @@ logger = logging.getLogger(__name__)
 class AnnotationDB:
     def __init__(self, db_path):
         # 初始化
-        self.db_path = Path(db_path)
+        try:
+            db_path = Path(db_path)
+        except Exception:
+            logger.exception(f"轉換 Path 失敗: {db_path}")
+            raise FileExistsError(f"{db_path} 路徑不存在。")
+        if not db_path.is_file():
+            logger.exception(f"路徑非檔案格式: {db_path}")
+            raise FileNotFoundError(f"{db_path} 非檔案格式。")
+        elif db_path.suffix not in [".db"]:
+            logger.exception(f"路徑非資料庫檔案: {db_path}")
+            raise FileNotFoundError(f"{db_path} 非資料庫檔案。(目前僅用 SQLite 的 .db 格式)")
+
+        self.db_path = db_path
         self._init_db()
 
     def _connect(self):
@@ -148,20 +160,20 @@ class AnnotationDB:
             logger.exception("註解取得失敗")
             raise
 
-    def update_note(self, image_id, note):
+    def update_note(self, img_path, note):
         # 更新註解
         try:
-            assert isinstance(image_id, int), "image_id 必須是整數"
+            assert isinstance(img_path, str), "img_path 必須是字串"
 
             with self._connect() as conn:
                 sql = """
                 UPDATE image_data
                 SET note = ?
-                WHERE id = ?
+                WHERE image_path = ?
                 """
-                conn.execute(sql, (note, image_id))
+                conn.execute(sql, (note, img_path))
                 conn.commit()
-                logger.info(f"[image_data] ID:{image_id} 更新一筆成功")
+                logger.info(f"[image_data] {img_path} 更新一筆成功")
 
         except AssertionError:
             logger.exception("AssertionError：假設不成立")

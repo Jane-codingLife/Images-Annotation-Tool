@@ -13,7 +13,16 @@ logger = logging.getLogger(__name__)
 class ImageRepository:
     def __init__(self, folder_path):
         # 初始化
-        self.folder = Path(folder_path)
+        try:
+            folder_path = Path(folder_path)
+        except Exception:
+            logger.exception(f"轉換 Path 失敗: {folder_path}")
+            raise FileExistsError(f"{folder_path} 路徑不存在。")
+        if not folder_path.is_dir():
+            logger.exception(f"路徑非資料夾: {folder_path}")
+            raise FileNotFoundError(f"{folder_path} 非資料夾路徑。")
+
+        self.folder = folder_path
         self.images = self._load_images()
 
         logger.info(f"ImageRepository initialized，圖片數量={len(self.images)}")

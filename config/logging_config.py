@@ -5,6 +5,7 @@
 
 import logging
 from pathlib import Path
+from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
 
 # 檔案位置設定
 BASE_PATH = Path(__file__).resolve().parent.parent
@@ -25,27 +26,49 @@ formatter = logging.Formatter(
 )
 
 # handler
-# 1: 全部
-app_handler = logging.FileHandler(
+# 1: 全部(大小)
+# app_handler = logging.FileHandler(
+#     filename=LOG_PATH / "appLog.log",
+#     encoding="utf-8"
+# )
+app_handler = RotatingFileHandler(
     filename=LOG_PATH / "appLog.log",
+    maxBytes=2 * 1024 * 1024,
+    backupCount=10,
     encoding="utf-8"
 )
 app_handler.setFormatter(formatter)
 app_handler.setLevel(logging.INFO)
 
-# 2: DB
-db_handler = logging.FileHandler(
-    filename=LOG_PATH / "dbLog.log",
+# 2: DB(每日)
+mod_handler = logging.FileHandler(
+    filename=LOG_PATH / "modelLog.log",
     encoding="utf-8"
 )
-db_handler.setFormatter(formatter)
-db_handler.setLevel(logging.INFO)
+# mod_handler = TimedRotatingFileHandler(
+#     filename=LOG_PATH / "modelLog.log",
+#     when="midnight",
+#     interval=1,
+#     backupCount=30,
+#     encoding="utf-8"
+# )
+# mod_handler.suffix = "%Y-%m-%d"
+mod_handler.setFormatter(formatter)
+mod_handler.setLevel(logging.INFO)
 
-# 3: Controller
+# 3: Controller(每周)
 con_handler = logging.FileHandler(
     filename=LOG_PATH / "controllerLog.log",
     encoding="utf-8"
 )
+# con_handler = TimedRotatingFileHandler(
+#     filename=LOG_PATH / "controllerLog.log",
+#     when="W0",             # W0 = 週一
+#     interval=1,
+#     backupCount=8,         # 保留 8 週
+#     encoding="utf-8"
+# )
+# con_handler.suffix = "%Y-W%W"
 con_handler.setFormatter(formatter)
 con_handler.setLevel(logging.INFO)
 
@@ -55,13 +78,13 @@ root_logger.setLevel(logging.INFO)
 if not root_logger.handlers:
     root_logger.addHandler(app_handler)
 
-db_logger = logging.getLogger("models.annotation_db")
-db_logger.setLevel(logging.INFO)
-if not db_logger.handlers:
-    db_logger.addHandler(db_handler)
-db_logger.propagate = False
+mod_logger = logging.getLogger("models")
+mod_logger.setLevel(logging.INFO)
+if not mod_logger.handlers:
+    mod_logger.addHandler(mod_handler)
+mod_logger.propagate = False
 
-con_logger = logging.getLogger("controllers.image_controller")
+con_logger = logging.getLogger("controllers")
 con_logger.setLevel(logging.INFO)
 if not con_logger.handlers:
     con_logger.addHandler(con_handler)
