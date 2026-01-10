@@ -62,6 +62,7 @@ class MainWindow(tk.Tk):
         self.current_index_1_based = 1
         self.total_index = 0
         self.img_path = None
+        self.db_path = None
 
         safe_call(self._build_layout)
         safe_call(self._bind_events)
@@ -85,13 +86,16 @@ class MainWindow(tk.Tk):
         self.top_frame.pack(fill=tk.X, padx=10, pady=5)
 
         self.btn_image_list = tk.Button(self.top_frame, text="圖片清單")
-        self.btn_image_list.pack(side=tk.LEFT, padx=10)
+        # self.btn_image_list.pack(side=tk.LEFT, padx=10)
 
         self.btn_select = tk.Button(self.top_frame, text="選擇資料夾")
-        self.btn_select.pack(side=tk.LEFT)
+        # self.btn_select.pack(side=tk.LEFT)
 
         self.lbl_folderName = tk.Label(self.top_frame, text="...")
-        self.lbl_folderName.pack(side=tk.LEFT)
+        # self.lbl_folderName.pack(side=tk.LEFT)
+
+        self.btn_db_select = tk.Button(self.top_frame, text="資料庫選定")
+        self.btn_db_select.pack(side=tk.LEFT)
 
         self.lbl_status = tk.Label(self.top_frame, text="尚未載入資料")
         self.lbl_status.pack(side=tk.RIGHT)
@@ -155,6 +159,7 @@ class MainWindow(tk.Tk):
     # ---------- Event Binding ----------
     def _bind_events(self):
         self.btn_select.config(command=lambda fc=self.on_select_folder: safe_call(fc))
+        self.btn_db_select.config(command=lambda fc=self.on_select_folder_db: safe_call(fc))
         self.btn_prev.config(command=lambda fc=self.on_prev: safe_call(fc))
         self.btn_next.config(command=lambda fc=self.on_next: safe_call(fc))
         self.btn_jump.config(command=lambda fc=self.on_jump: safe_call(fc))
@@ -162,23 +167,29 @@ class MainWindow(tk.Tk):
         self.btn_image_list.config(command=lambda fc=self.on_show_listbox: safe_call(fc))
 
     # ---------- Event Handlers ----------
+    def on_select_folder_db(self):
+        self.db_path = filedialog.askopenfilename()
+        if not self.db_path:
+            return
+
+        self.btn_db_select.pack_forget()
+        self.btn_image_list.pack(side=tk.LEFT, padx=10)
+        self.btn_select.pack(side=tk.LEFT)
+        self.lbl_folderName.pack(side=tk.LEFT)
+
     def on_select_folder(self):
         # 資料夾選擇：初始化所有資料來源
         images_path = filedialog.askdirectory()
-        if not images_path:
+        if not images_path and not self.db_path:
             return
 
         images_path = Path(images_path)
-        db_path = Path(__file__).resolve().parent.parent / "data"
-        db_path.mkdir(exist_ok=True)
-        db_path = db_path / "annotation.db"
-
         self.lbl_folderName.config(text=f" {images_path.name}")
         logger.info(f"資料夾選擇: {images_path}")
 
         # 組裝(Composition)
         repo = ImageRepository(images_path)
-        db = AnnotationDB(db_path)
+        db = AnnotationDB(self.db_path)
         self.controller = ImageAnnotationController(repo, db)
         self.current_index_1_based = 1
         self.total_index = self.controller.get_total_count()["total_count"]

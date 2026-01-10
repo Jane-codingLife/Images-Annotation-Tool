@@ -28,3 +28,4 @@ comic/
 
 # Tests (runtime / temp)
 tests/
+*.ico

@@ -108,39 +108,39 @@ class AnnotationDB:
             raise
 
     # ========== Controller 對接 ==========
-    def get_or_create(self, image_path):
-        # 取得或新建圖片資料
-        # ★ 主要對接 image_repository 的資料取得
-        try:
-            image_path = str(image_path)
-
-            with self._connect() as conn:
-                conn.row_factory = sqlite3.Row
-                sql = """
-                SELECT id, image_path, note
-                FROM image_data
-                WHERE image_path = ?
-                """
-                row = conn.execute(sql, (image_path, )).fetchone()
-
-                # 如果資料不是 None
-                if row:
-                    return row
-
-                sql = """
-                INSERT INTO image_data (image_path, note)
-                    VALUES (?, ?)
-                """
-                conn.execute(sql, (image_path, ""))
-                conn.commit()
-                logger.info(f"[image_data] {image_path} 新增一筆成功")
-
-                # 重新呼叫
-                return self.get_or_create(image_path)
-
-        except Exception:
-            logger.exception("圖片資料取得/建立失敗")
-            raise
+    # def get_or_create(self, image_path):
+    #     # 取得或新建圖片資料
+    #     # ★ 主要對接 image_repository 的資料取得
+    #     try:
+    #         image_path = str(image_path)
+    #
+    #         with self._connect() as conn:
+    #             conn.row_factory = sqlite3.Row
+    #             sql = """
+    #             SELECT id, image_path, note
+    #             FROM image_data
+    #             WHERE image_path = ?
+    #             """
+    #             row = conn.execute(sql, (image_path, )).fetchone()
+    #
+    #             # 如果資料不是 None
+    #             if row:
+    #                 return row
+    #
+    #             sql = """
+    #             INSERT INTO image_data (image_path, note)
+    #                 VALUES (?, ?)
+    #             """
+    #             conn.execute(sql, (image_path, ""))
+    #             conn.commit()
+    #             logger.info(f"[image_data] {image_path} 新增一筆成功")
+    #
+    #             # 重新呼叫
+    #             return self.get_or_create(image_path)
+    #
+    #     except Exception:
+    #         logger.exception("圖片資料取得/建立失敗")
+    #         raise
 
     def get_annotation(self, image_path):
         # 依圖片路徑取得註解
@@ -166,6 +166,21 @@ class AnnotationDB:
             assert isinstance(img_path, str), "img_path 必須是字串"
 
             with self._connect() as conn:
+                sql = """
+                SELECT *
+                FROM image_data
+                WHERE image_path = ?
+                """
+                row = conn.execute(sql, (img_path, )).fetchone()
+                if not row:
+                    sql = """
+                    INSERT INTO image_data (image_path, note)
+                        VALUES (?, ?)
+                    """
+                    conn.execute(sql, (img_path, ""))
+                    conn.commit()
+                    logger.info(f"[image_data] {img_path} 新增一筆成功")
+
                 sql = """
                 UPDATE image_data
                 SET note = ?
