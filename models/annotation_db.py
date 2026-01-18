@@ -9,6 +9,7 @@
 import sqlite3
 import logging
 from pathlib import Path
+from config.errors import PathError, DBError
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,13 @@ class AnnotationDB:
             db_path = Path(db_path)
         except Exception:
             logger.exception(f"轉換 Path 失敗: {db_path}")
-            raise FileExistsError(f"{db_path} 路徑不存在。")
+            raise PathError()
         if not db_path.is_file():
             logger.exception(f"路徑非檔案格式: {db_path}")
-            raise FileNotFoundError(f"{db_path} 非檔案格式。")
+            raise PathError(f"{db_path} 非檔案格式。")
         elif db_path.suffix not in [".db"]:
             logger.exception(f"路徑非資料庫檔案: {db_path}")
-            raise FileNotFoundError(f"{db_path} 非資料庫檔案。(目前僅用 SQLite 的 .db 格式)")
+            raise PathError(f"{db_path} 非資料庫檔案。(目前僅用 SQLite 的 .db 格式)")
 
         self.db_path = db_path
         self._init_db()
@@ -62,7 +63,7 @@ class AnnotationDB:
 
         except Exception:
             logger.exception("資料庫初始化/資料表建立失敗")
-            raise
+            raise DBError()
 
     def get_total_count(self):
         # 取得目前資料表總數
@@ -78,15 +79,12 @@ class AnnotationDB:
 
         except Exception:
             logger.exception("取得總筆數失敗")
-            raise
+            raise DBError()
 
     def get_by_index(self, index):
         # 取得一筆資料
         # 這是 debug / admin 用 API
         try:
-            assert isinstance(index, int), "index 必須是整數"
-            assert index >= 0, "index 不可為負數"
-
             with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 sql = """
@@ -99,53 +97,15 @@ class AnnotationDB:
 
             return row
 
-        except AssertionError:
-            logger.exception("AssertionError：圖片 index 假設不成立")
-            raise
-
         except Exception:
             logger.exception("index 取得圖片資料失敗")
-            raise
+            raise DBError()
 
     # ========== Controller 對接 ==========
-    # def get_or_create(self, image_path):
-    #     # 取得或新建圖片資料
-    #     # ★ 主要對接 image_repository 的資料取得
-    #     try:
-    #         image_path = str(image_path)
-    #
-    #         with self._connect() as conn:
-    #             conn.row_factory = sqlite3.Row
-    #             sql = """
-    #             SELECT id, image_path, note
-    #             FROM image_data
-    #             WHERE image_path = ?
-    #             """
-    #             row = conn.execute(sql, (image_path, )).fetchone()
-    #
-    #             # 如果資料不是 None
-    #             if row:
-    #                 return row
-    #
-    #             sql = """
-    #             INSERT INTO image_data (image_path, note)
-    #                 VALUES (?, ?)
-    #             """
-    #             conn.execute(sql, (image_path, ""))
-    #             conn.commit()
-    #             logger.info(f"[image_data] {image_path} 新增一筆成功")
-    #
-    #             # 重新呼叫
-    #             return self.get_or_create(image_path)
-    #
-    #     except Exception:
-    #         logger.exception("圖片資料取得/建立失敗")
-    #         raise
-
-    def get_annotation(self, image_path):
+    def get_annotation(self, img_path):
         # 依圖片路徑取得註解
         try:
-            image_path = str(image_path)
+            img_path = str(img_path)
 
             with self._connect() as conn:
                 sql = """
@@ -153,18 +113,16 @@ class AnnotationDB:
                 FROM image_data
                 WHERE image_path = ?
                 """
-                row = conn.execute(sql, (image_path, )).fetchone()
+                row = conn.execute(sql, (img_path, )).fetchone()
                 return row[0] if row else row
 
         except Exception:
             logger.exception("註解取得失敗")
-            raise
+            raise DBError()
 
     def update_note(self, img_path, note):
         # 更新註解
         try:
-            assert isinstance(img_path, str), "img_path 必須是字串"
-
             with self._connect() as conn:
                 sql = """
                 SELECT *
@@ -190,42 +148,6 @@ class AnnotationDB:
                 conn.commit()
                 logger.info(f"[image_data] {img_path} 更新一筆成功")
 
-        except AssertionError:
-            logger.exception("AssertionError：假設不成立")
-            raise
-
         except Exception:
             logger.exception("更新 note 失敗")
-            raise
-
-
-if __name__ == "__main__":
-    BASE_PATH = Path(__file__).resolve().parent.parent
-    DB_PATH = BASE_PATH / "data"
-    DB_PATH.mkdir(exist_ok=True)
-    db = AnnotationDB(DB_PATH / "annotation.db")
-    # from image_repository import ImageRepository
-    # repo = ImageRepository(r"comic\Devil's Candy")
-    # test = db.get_or_create(repo.images[1])
-    # print(test)
-    # print(db.get_by_index(0))
-    # print(db.get_by_index(1))
-    # print(db.get_by_index(2))
-    # print(db.get_by_index(3))
-    # print(db.get_by_index(4))
-    # print(db.get_by_index(5))
-
-    # print(db.get_annotation(r"D:\Python\ImagesCV\comic\Devil's Candy\DVC_ch01_p007"))
-
-    # GC = [
-    #     db.get_or_create("test1.jpg"),
-    #     db.get_or_create("test2.png"),
-    #     db.get_or_create("test3.jpeg"),
-    # ]
-    # print("image_data 資料表中目前的總數:", db.get_total_count())
-    # print(GC[0])
-    # db.update_note(1, "abc\ndef")
-    # print(db.get_by_index(0))
-
-
-
+            raise DBError()

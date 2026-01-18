@@ -29,3 +29,8 @@ comic/
 # Tests (runtime / temp)
 tests/
 *.ico
+
+# EXE Create
+build/
+dist/
+*.exe

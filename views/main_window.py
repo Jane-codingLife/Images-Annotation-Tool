@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox
 from models import ImageRepository, AnnotationDB
 from controllers import ImageAnnotationController
 from views.image_viewer import ImageViewer
+from config.errors import AppError
 # 安裝 pillow
 from PIL import Image, ImageTk
 
@@ -24,11 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 # ---------- Error Handlers ----------
-def error_handler(exc: Exception):
-    # 1. 給工程師完整 trace（已經寫進 log 了，這行是保險）
-    logger.exception(f"UI caught Error: {str(exc)}")
-    # 2. 給使用者看的訊息（整理過）
-    messagebox.showerror("錯誤", str(exc))
+# def error_handler(exc: Exception):
+#     # 1. 給工程師完整 trace（已經寫進 log 了，這行是保險）
+#     logger.exception(f"UI caught Error: {str(exc)}")
+#     # 2. 給使用者看的訊息（整理過）
+#     messagebox.showerror("錯誤", str(exc))
 
 
 def safe_call(func, args=None):
@@ -37,8 +38,12 @@ def safe_call(func, args=None):
             func(**args)
         else:
             func()
-    except Exception as e:
-        error_handler(e)
+    except AppError as e:
+        logger.exception("Handled application error")
+        messagebox.showerror("錯誤", e.user_msg)
+    except Exception:
+        logger.exception("Unhandled error")
+        messagebox.showerror("錯誤", "系統發生異常，請查看 log")
 
 
 class MainWindow(tk.Tk):
@@ -232,9 +237,8 @@ class MainWindow(tk.Tk):
         safe_call(self.save_flag)
         try:
             page = int(self.entry_jump.get())
-        except Exception as e:
-            error_handler(e)
-            raise
+        except Exception:
+            raise AppError()
         if page < 1 or page > self.total_index:
             messagebox.showinfo("資訊", "超過頁數。")
             return
@@ -283,6 +287,7 @@ class MainWindow(tk.Tk):
     def refresh_listbox(self):
         if not self.controller:
             return
+        yview = self.listbox.yview()
         self.listbox.delete(0, tk.END)
 
         result = self.controller.get_all_images()
@@ -295,6 +300,7 @@ class MainWindow(tk.Tk):
                 self.listbox.itemconfig(idx, bg="gray")
 
         self.listbox.selection_set(self.current_index_1_based - 1)
+        self.listbox.yview_moveto(yview[0])
 
     # ---------- View Update ----------
     def update_view(self):

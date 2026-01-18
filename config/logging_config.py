@@ -25,7 +25,7 @@ formatter = logging.Formatter(
     "%(asctime)s [%(levelname)s] %(name)s:- %(message)s"
 )
 
-# handler
+# ========== handler ==========
 # 1: 全部(大小)
 # app_handler = logging.FileHandler(
 #     filename=LOG_PATH / "appLog.log",
@@ -54,7 +54,7 @@ mod_handler = logging.FileHandler(
 # )
 # mod_handler.suffix = "%Y-%m-%d"
 mod_handler.setFormatter(formatter)
-mod_handler.setLevel(logging.INFO)
+mod_handler.setLevel(logging.DEBUG)
 
 # 3: Controller(每周)
 con_handler = logging.FileHandler(
@@ -79,7 +79,7 @@ if not root_logger.handlers:
     root_logger.addHandler(app_handler)
 
 mod_logger = logging.getLogger("models")
-mod_logger.setLevel(logging.INFO)
+mod_logger.setLevel(logging.DEBUG)
 if not mod_logger.handlers:
     mod_logger.addHandler(mod_handler)
 mod_logger.propagate = False
